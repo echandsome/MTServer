@@ -1,0 +1,12 @@
+/node_modules
+/dist
+/build
+/temp
+/compiled
+/logs
+/config
+/data
+/backups
+
+.env
+.env.example
