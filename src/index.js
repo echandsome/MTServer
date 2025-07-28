@@ -9,6 +9,7 @@ const PORT = constants.PORT;
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: constants.MAX_FILE_SIZE }));
+app.use(express.urlencoded({ extended: true, limit: constants.MAX_FILE_SIZE }));
 
 // Mount routes
 app.use('/', routes);
