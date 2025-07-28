@@ -14,8 +14,8 @@ const MQL4_PATH = 'C:\\Program Files\\MetaTrader\\';
 const MQL5_PATH = 'C:\\Program Files\\MetaTrader 5\\';
 
 // Directory paths
-const TEMP_DIR = path.join(__dirname, 'assets', 'temp');
-const COMPILED_DIR = path.join(__dirname, 'assets', 'compiled');
+const TEMP_DIR = path.join(__dirname, '../assets', 'temp');
+const COMPILED_DIR = path.join(__dirname, '../assets', 'compiled');
 
 module.exports = {
     PORT,
