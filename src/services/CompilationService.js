@@ -31,6 +31,7 @@ class CompilationService {
     // Create temporary source file
     const sourceFile = path.join(this.TEMP_DIR, `${jobId}${fileExtension}`);
     const compiledFile = path.join(this.COMPILED_DIR, `${jobId}${compiledExtension}`);
+    const logFile = path.join(this.TEMP_DIR, `${jobId}.log`);
     
     try {
       // Write code to temporary file
@@ -41,58 +42,99 @@ class CompilationService {
         ? path.join(this.MQL5_PATH, 'metaeditor64.exe')
         : path.join(this.MQL4_PATH, 'metaeditor.exe');
       
-      // Compile command
-      const compileCommand = `"${compilerPath}" /compile:"${sourceFile}" /log`;
+      // Compile command with output path and log file
+      const compileCommand = `"${compilerPath}" /compile:"${sourceFile}" /log:"${logFile}"`;
+
+      try {
+        // Execute compilation
+        const result = await execAsync(compileCommand, {
+          timeout: this.COMPILATION_TIMEOUT,
+          cwd: path.dirname(sourceFile)
+        });
+      } catch (err) {
+      }
+
+      const tempeComeplationFile = sourceFile.replace(fileExtension, compiledExtension);
+     
+      // Check if compilation was successful by looking for the output file
+      const compilationSuccessful = await fs.pathExists(tempeComeplationFile);
       
-      // Execute compilation
-      const { stdout, stderr } = await execAsync(compileCommand, {
-        timeout: this.COMPILATION_TIMEOUT,
-        cwd: path.dirname(sourceFile)
-      });
-      
-      // Check if compilation was successful
-      const expectedCompiledFile = sourceFile.replace(fileExtension, compiledExtension);
-      const compilationSuccessful = await fs.pathExists(expectedCompiledFile);
+      // Read compilation log if it exists
+      let compilationLog = '';
+      if (await fs.pathExists(logFile)) {
+        try {
+          // Try different encodings to handle MetaEditor's log file encoding
+          const encodings = ['utf8', 'utf16le', 'latin1', 'cp1252'];
+          
+          for (const encoding of encodings) {
+            try {
+              compilationLog = await fs.readFile(logFile, encoding);
+              // If we can read it without errors, break
+              break;
+            } catch (encodingErr) {
+              // Try next encoding
+              continue;
+            }
+          }
+          
+          // If all encodings fail, try with buffer and detect encoding
+          if (!compilationLog) {
+            const buffer = await fs.readFile(logFile);
+            // Try to detect encoding from buffer
+            compilationLog = buffer.toString('utf8').replace(/\0/g, '');
+          }
+        } catch (logErr) {
+          console.log('Could not read log file:', logErr.message);
+        }
+      }
       
       if (compilationSuccessful) {
-        // Move compiled file to output directory
-        await fs.move(expectedCompiledFile, compiledFile);
-        
+        await fs.move(tempeComeplationFile, compiledFile);
+        // Clean the compilation log for successful compilation
+        const cleanOutput = compilationLog ? this.parseCompilationErrors(compilationLog) : 'Compilation completed successfully';
         return {
           success: true,
           compiledFile: `${jobId}${compiledExtension}`,
           outputPath: compiledFile,
-          compilerOutput: stdout
+          compilerOutput: cleanOutput
         };
       } else {
-        // Parse compilation errors from stderr or stdout
-        const errors = this.parseCompilationErrors(stderr || stdout);
+        // Parse and clean the compilation log for errors
+        const errorMessage = this.parseCompilationErrors(compilationLog);
         return {
           success: false,
-          errors: errors || 'Compilation failed with unknown error'
+          errors: errorMessage
         };
       }
       
     } finally {
-      // Clean up temporary source file
+      // Clean up temporary files
       await fs.remove(sourceFile).catch(() => {});
+      await fs.remove(logFile).catch(() => {});
     }
   }
 
   parseCompilationErrors(output) {
     if (!output) return 'No compilation output received';
     
+    // Clean up the output by removing null characters and fixing encoding issues
+    let cleanOutput = output
+      .replace(/\0/g, '') // Remove null characters
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '') // Remove control characters
+      .trim();
+    
     // Extract meaningful error messages from MetaEditor output
-    const lines = output.split('\n');
+    const lines = cleanOutput.split('\n');
     const errors = [];
     
     for (const line of lines) {
-      if (line.includes('error') || line.includes('Error')) {
-        errors.push(line.trim());
+      const trimmedLine = line.trim();
+      if (trimmedLine && (trimmedLine.includes('error') || trimmedLine.includes('Error'))) {
+        errors.push(trimmedLine);
       }
     }
     
-    return errors.length > 0 ? errors.join('\n') : output;
+    return errors.length > 0 ? errors.join('\n') : cleanOutput;
   }
 
   async getCompiledFile(jobId) {

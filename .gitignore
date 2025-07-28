@@ -9,3 +9,6 @@
 /backups
 
 .env
+
+/assets/temp
+/assets/compiled
