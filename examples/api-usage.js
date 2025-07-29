@@ -2,7 +2,7 @@
 
 const axios = require('axios');
 
-const API_BASE_URL = 'http://localhost:3001';
+const API_BASE_URL = 'http://localhost:8080/api';
 const API_KEY = 'your-api-key-here'; // Replace with your actual API key
 
 // Example MQL4 code
@@ -47,7 +47,7 @@ async function compileMQLCode() {
       jobId: 'example-job-' + Date.now()
     }, {
       headers: {
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': `Bearer ${API_KEY}`
       }
     });
