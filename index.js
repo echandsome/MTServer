@@ -12,7 +12,7 @@ app.use(express.json({ limit: constants.MAX_FILE_SIZE }));
 app.use(express.urlencoded({ extended: true, limit: constants.MAX_FILE_SIZE }));
 
 // Mount routes
-app.use('/', routes);
+app.use('/api', routes);
 
 app.listen(PORT, () => {
   console.log(`MQL Compilation Server running on port ${PORT}`);
