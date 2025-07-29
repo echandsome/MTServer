@@ -3,6 +3,7 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const constants = require('../config/contants');
+const logger = require('../utils/logger');
 
 const execAsync = promisify(exec);
 
@@ -20,13 +21,20 @@ class CompilationService {
   }
 
   ensureDirectories() {
-    fs.ensureDirSync(this.TEMP_DIR);
-    fs.ensureDirSync(this.COMPILED_DIR);
+    try {
+      fs.ensureDirSync(this.TEMP_DIR);
+      fs.ensureDirSync(this.COMPILED_DIR);
+    } catch (error) {
+      logger.error(`Failed to create directories: ${error.message}`);
+      throw error;
+    }
   }
 
   async compileCode(code, platform, jobId) {
     const fileExtension = platform === 'mql5' ? '.mq5' : '.mq4';
     const compiledExtension = platform === 'mql5' ? '.ex5' : '.ex4';
+    
+    logger.info(`Starting compilation: ${jobId} (${platform})`);
     
     // Create temporary source file
     const sourceFile = path.join(this.TEMP_DIR, `${jobId}${fileExtension}`);
@@ -47,11 +55,12 @@ class CompilationService {
 
       try {
         // Execute compilation
-        const result = await execAsync(compileCommand, {
+        await execAsync(compileCommand, {
           timeout: this.COMPILATION_TIMEOUT,
           cwd: path.dirname(sourceFile)
         });
       } catch (err) {
+        logger.warn(`Compilation command failed: ${jobId} - ${err.message}`);
       }
 
       const tempeComeplationFile = sourceFile.replace(fileExtension, compiledExtension);
@@ -69,10 +78,8 @@ class CompilationService {
           for (const encoding of encodings) {
             try {
               compilationLog = await fs.readFile(logFile, encoding);
-              // If we can read it without errors, break
               break;
             } catch (encodingErr) {
-              // Try next encoding
               continue;
             }
           }
@@ -80,11 +87,10 @@ class CompilationService {
           // If all encodings fail, try with buffer and detect encoding
           if (!compilationLog) {
             const buffer = await fs.readFile(logFile);
-            // Try to detect encoding from buffer
             compilationLog = buffer.toString('utf8').replace(/\0/g, '');
           }
         } catch (logErr) {
-          console.log('Could not read log file:', logErr.message);
+          logger.warn(`Could not read log file: ${jobId} - ${logErr.message}`);
         }
       }
       
@@ -92,6 +98,9 @@ class CompilationService {
         await fs.move(tempeComeplationFile, compiledFile);
         // Clean the compilation log for successful compilation
         const cleanOutput = compilationLog ? this.parseCompilationErrors(compilationLog) : 'Compilation completed successfully';
+        
+        logger.info(`Compilation completed: ${jobId} -> ${jobId}${compiledExtension}`);
+        
         return {
           success: true,
           compiledFile: `${jobId}${compiledExtension}`,
@@ -101,6 +110,9 @@ class CompilationService {
       } else {
         // Parse and clean the compilation log for errors
         const errorMessage = this.parseCompilationErrors(compilationLog);
+        
+        logger.warn(`Compilation failed: ${jobId} - ${errorMessage}`);
+        
         return {
           success: false,
           errors: errorMessage
